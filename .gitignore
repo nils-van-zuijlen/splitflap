@@ -29,6 +29,8 @@ fp-info-cache
 *.xml
 *.csv
 
+module-driver/target
+
 # Devenv
 .devenv*
 devenv.local.nix
