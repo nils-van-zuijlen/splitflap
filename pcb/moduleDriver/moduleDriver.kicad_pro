@@ -472,8 +472,8 @@
       "idf": "",
       "netlist": "",
       "specctra_dsn": "",
-      "step": "",
-      "vrml": ""
+      "step": "moduleDriver.step",
+      "vrml": "moduleDriver.wrl"
     },
     "page_layout_descr_file": ""
   },

@@ -1,6 +1,6 @@
 use embedded_hal::digital::v2::OutputPin;
 
-pub const STEPS_PER_REVOLUTION: u32 = 2038;  // 28BYJ-48
+pub const STEPS_PER_REVOLUTION: u32 = 2038; // 28BYJ-48
 
 pub struct MotorDriver<'a, E> {
     pin_coil_a: &'a mut dyn OutputPin<Error = E>,
@@ -43,34 +43,41 @@ impl<'a, E> MotorDriver<'a, E> {
                 self.pin_coil_b.set_high()?;
                 self.pin_coil_c.set_low()?;
                 self.pin_coil_d.set_low()?;
-                1
+                3
             }
             1 => {
                 self.pin_coil_a.set_low()?;
                 self.pin_coil_b.set_high()?;
                 self.pin_coil_c.set_high()?;
                 self.pin_coil_d.set_low()?;
-                2
+                0
             }
             2 => {
                 self.pin_coil_a.set_low()?;
                 self.pin_coil_b.set_low()?;
                 self.pin_coil_c.set_high()?;
                 self.pin_coil_d.set_high()?;
-                3
+                1
             }
             _ => {
                 self.pin_coil_a.set_high()?;
                 self.pin_coil_b.set_low()?;
                 self.pin_coil_c.set_low()?;
                 self.pin_coil_d.set_high()?;
-                0
+                2
             }
         };
         self.current_index += 1;
         if self.current_index == STEPS_PER_REVOLUTION {
             self.current_index = 0;
         }
+        Ok(self.current_index)
+    }
+    pub fn stop(&mut self) -> Result<u32, E> {
+        self.pin_coil_a.set_low()?;
+        self.pin_coil_b.set_low()?;
+        self.pin_coil_c.set_low()?;
+        self.pin_coil_d.set_low()?;
         Ok(self.current_index)
     }
 }
