@@ -4,12 +4,20 @@ use embedded_hal::digital::v2::InputPin;
 
 pub const LETTER_COUNT: u8 = 45;
 
+enum Status {
+    Reset1,
+    Reset2,
+    Work,
+    Stop,
+}
+
 pub struct Module<'a, E> {
     motor: MotorDriver<'a, E>,
     sensor_pin: &'a dyn InputPin<Error = E>,
     target_step: u32,
     offset: u32,
     target_display: u8,
+    status: Status,
 }
 
 impl<'a, E> Module<'a, E> {
@@ -24,25 +32,12 @@ impl<'a, E> Module<'a, E> {
             target_display: 0,
             target_step: 0,
             offset,
+            status: Status::Reset1,
         }
     }
 
-    pub fn reset<T>(&mut self, delay: &mut T) -> Result<(), E>
-    where
-        T: FnMut() -> (),
-    {
-        while self.sensor_pin.is_low()? {
-            self.motor.advance_step()?;
-            delay();
-        }
-        while self.sensor_pin.is_high()? {
-            self.motor.advance_step()?;
-            delay();
-        }
-        self.motor.reset_index_to(self.offset);
-        self.motor.stop()?;
-
-        Ok(())
+    pub fn reset(&mut self) {
+        self.status = Status::Reset1;
     }
 
     /// Set the target letter for the module
@@ -57,15 +52,40 @@ impl<'a, E> Module<'a, E> {
 
     /// If motor should move, advance it of one step
     pub fn move_to_target(&mut self) -> Result<(), E> {
-        if self.moving() {
-            self.motor.advance_step()?;
-        } else {
-            self.motor.stop()?;
+        match self.status {
+            Status::Reset1 => {
+                if self.sensor_pin.is_low()? {
+                    self.motor.advance_step()?;
+                } else {
+                    self.status = Status::Reset2;
+                }
+            }
+            Status::Reset2 => {
+                if self.sensor_pin.is_high()? {
+                    self.motor.advance_step()?;
+                } else {
+                    self.motor.reset_index_to(self.offset);
+                    self.status = Status::Work;
+                }
+            }
+            Status::Work => {
+                if self.moving() {
+                    self.motor.advance_step()?;
+                } else {
+                    self.status = Status::Stop;
+                }
+            }
+            Status::Stop => {
+                if self.moving() {
+                    self.status = Status::Work;
+                } else {
+                    self.motor.stop()?;
+                }}
         }
         Ok(())
     }
 
-    pub fn moving(&self) -> bool {
+    fn moving(&self) -> bool {
         self.motor.current_index() != self.target_step
     }
 }

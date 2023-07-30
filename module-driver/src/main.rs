@@ -88,10 +88,10 @@ fn core1_thread() -> ! {
         .into_push_pull_output_in_state(hal::gpio::PinState::High);
 
     // reset barrels
-    module_a.reset(&mut delay).unwrap();
-    module_b.reset(&mut delay).unwrap();
-    module_c.reset(&mut delay).unwrap();
-    module_d.reset(&mut delay).unwrap();
+    module_a.reset();
+    module_b.reset();
+    module_c.reset();
+    module_d.reset();
     led.set_low().unwrap();
 
     loop {
@@ -104,7 +104,7 @@ fn core1_thread() -> ! {
             let letter_index: u8 = (command & 0xFF).try_into().unwrap();
 
             if letter_index == 0xFF {
-                modules[module_index as usize].reset(&mut delay).unwrap();
+                modules[module_index as usize].reset();
             } else {
                 modules[module_index as usize].set_target(letter_index);
             }
