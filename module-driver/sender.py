@@ -1,25 +1,11 @@
 import serial
 from serial.tools import list_ports
 
-ports = list_ports.comports()
-
-for port in ports:
-    if port.description == 'Split flap':
-        break
-else:
-    print("No split flap display serial found.")
-    exit(1)
-
-output = serial.Serial(port.device)
-print("Serial port found and initialized.")
-
-LETTERS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ$&#0123456789:.-?!"
-
 
 def transform(value: str) -> bytes:
     value = value.upper()
 
-    out = b'\xF0'
+    out = b"\xF0"
 
     for char in value:
         try:
@@ -27,13 +13,35 @@ def transform(value: str) -> bytes:
             out += index.to_bytes()
         except ValueError:
             # not a valid letter
-            if char == '\\':  # reset char
-                out += b'\xFE'
-            elif char == '@':  # reset all
-                out += b'\xFF'
+            if char == "\\":  # reset char
+                out += b"\xFE"
+            elif char == "@":  # reset all
+                out += b"\xFF"
 
     return out
 
 
-while entered := input(">>> "):
-    output.write(transform(entered))
+class Sender:
+    def __init__(self):
+        ports = list_ports.comports()
+
+        for port in ports:
+            if port.description == "Split flap":
+                break
+        else:
+            raise RuntimeError("No split flap display serial found.")
+
+        self.output = serial.Serial(port.device)
+        print("Serial port found and initialized.")
+
+    def send(self, word: str):
+        self.output.write(transform(word))
+
+
+LETTERS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ$&#0123456789:.-?!"
+
+
+if __name__ == "__main__":
+    sender = Sender()
+    while entered := input(">>> "):
+        sender.send(entered)
