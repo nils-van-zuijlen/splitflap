@@ -2,21 +2,24 @@ use rp_pico::hal;
 use crate::module_logic;
 use embedded_hal::serial::Write;
 
+
 pub struct Parser<D: hal::uart::UartDevice, P: hal::uart::ValidUartPinout<D>> {
     current_module_index: Option<u32>,
     fifo: hal::sio::SioFifo,
     write_uart: hal::uart::UartPeripheral<hal::uart::Enabled, D, P>,
 }
 
-impl<D: hal::uart::UartDevice, P: hal::uart::ValidUartPinout<D>> Parser<D, P> {
+impl<
+    D: hal::uart::UartDevice,
+    P: hal::uart::ValidUartPinout<D>
+> Parser<D, P> {
     pub fn new(fifo: hal::sio::SioFifo, write_uart: hal::uart::UartPeripheral<hal::uart::Enabled, D, P>) ->Self {
         Self { current_module_index: None, fifo, write_uart }
     }
 
     fn forward(&mut self, c: u8) -> () {
-        match self.write_uart.write(c) {
-            _ => {}
-        }
+        while !self.write_uart.uart_is_writable() {};
+        self.write_uart.write(c).unwrap();
     }
 
     pub fn parse_char(&mut self, c: u8) -> () {

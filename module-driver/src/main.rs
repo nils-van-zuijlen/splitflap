@@ -8,8 +8,8 @@ use rp_pico::hal::pac;
 use rp_pico::hal::uart::{self, UartConfig, UartPeripheral};
 use rp_pico::hal::{self, Clock};
 
-use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};
 use embedded_hal::prelude::*;
+use embedded_hal::digital::v2::ToggleableOutputPin;
 use fugit::{ExtU32, RateExtU32};
 use panic_halt as _;
 
@@ -33,10 +33,12 @@ fn core1_thread() -> ! {
         &mut pac.RESETS,
     );
 
+    sio.fifo.write_blocking(1);
+
     let timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
     let mut count_down = timer.count_down();
     let mut delay = || {
-        count_down.start(10.millis());
+        count_down.start(5.millis());
         let _ = nb::block!(count_down.wait());
     };
 
@@ -60,7 +62,7 @@ fn core1_thread() -> ! {
     let mut coil_d = pins.gpio18.into_push_pull_output();
 
     let driver = motor_driver::MotorDriver::new(&mut coil_a, &mut coil_b, &mut coil_c, &mut coil_d);
-    let mut module_b = module_logic::Module::new(driver, &limit_sw, 625);
+    let mut module_b = module_logic::Module::new(driver, &limit_sw, 630);
 
     // module C
     let limit_sw = pins.gpio14.into_pull_up_input();
@@ -82,17 +84,17 @@ fn core1_thread() -> ! {
     let driver = motor_driver::MotorDriver::new(&mut coil_a, &mut coil_b, &mut coil_c, &mut coil_d);
     let mut module_d = module_logic::Module::new(driver, &limit_sw, 625);
 
-    // status LED
-    let mut led = pins
-        .gpio3
-        .into_push_pull_output_in_state(hal::gpio::PinState::High);
-
     // reset barrels
     module_a.reset();
     module_b.reset();
     module_c.reset();
     module_d.reset();
-    led.set_low().unwrap();
+
+    // status LED
+    let mut led = pins
+        .gpio3
+        .into_push_pull_output_in_state(hal::gpio::PinState::High);
+    let mut status_changes: u32 = 0;
 
     loop {
         let modules = [&mut module_a, &mut module_b, &mut module_c, &mut module_d];
@@ -110,12 +112,15 @@ fn core1_thread() -> ! {
             }
         }
 
-        led.toggle().unwrap();
-
         for module in modules {
             module.move_to_target().unwrap();
         }
         delay();
+
+        status_changes += 1;
+        if status_changes % 16 == 0 {
+            led.toggle().unwrap()
+        }
     }
 }
 
@@ -150,6 +155,15 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
+
+    // Start core1_thread
+    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
+    let cores = mc.cores();
+    let core1 = &mut cores[1];
+    let _task = core1.spawn(unsafe { &mut CORE1_STACK.mem }, core1_thread);
+
+    // Wait until core1 also has initialized the pins
+    sio.fifo.read_blocking();
 
     // setup the HW UART buses
     let tx0 = pins.gpio16.into_mode();
@@ -195,12 +209,6 @@ fn main() -> ! {
         .device_class(2) // from: https://www.usb.org/defined-class-codes
         .build();
 
-    // Start core1_thread
-    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
-    let cores = mc.cores();
-    let core1 = &mut cores[1];
-    let _task = core1.spawn(unsafe { &mut CORE1_STACK.mem }, core1_thread);
-
     sio.fifo.write((0 << 16) + 0); // blank
     sio.fifo.write((1 << 16) + 0); // blank
     sio.fifo.write((2 << 16) + 0); // blank
@@ -225,6 +233,7 @@ fn main() -> ! {
                 }
             }
         }
+
 
         // Check for new data on the receiving UART
         if read_uart.uart_is_readable() {
