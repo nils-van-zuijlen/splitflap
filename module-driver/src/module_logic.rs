@@ -5,8 +5,10 @@ use embedded_hal::digital::v2::InputPin;
 pub const LETTER_COUNT: u8 = 45;
 
 enum Status {
-    Reset1,
-    Reset2,
+    Reset1_1,
+    Reset1_2,
+    Reset2_1,
+    Reset2_2,
     Work,
     Stop,
 }
@@ -32,12 +34,12 @@ impl<'a, E> Module<'a, E> {
             target_display: 0,
             target_step: 0,
             offset,
-            status: Status::Reset1,
+            status: Status::Reset1_1,
         }
     }
 
     pub fn reset(&mut self) {
-        self.status = Status::Reset1;
+        self.status = Status::Reset1_1;
     }
 
     /// Set the target letter for the module
@@ -53,16 +55,33 @@ impl<'a, E> Module<'a, E> {
     /// If motor should move, advance it of one step
     pub fn move_to_target(&mut self) -> Result<(), E> {
         match self.status {
-            Status::Reset1 => {
+            Status::Reset1_1 => {
                 if self.sensor_pin.is_low()? {
                     self.motor.advance_step()?;
+                    self.status = Status::Reset1_2;
                 } else {
-                    self.status = Status::Reset2;
+                    self.status = Status::Reset2_1;
                 }
             }
-            Status::Reset2 => {
+            Status::Reset1_2 => {
+                if self.sensor_pin.is_low()? {
+                    self.status = Status::Reset1_1;
+                } else {
+                    self.status = Status::Reset2_1;
+                }
+            }
+            Status::Reset2_1 => {
                 if self.sensor_pin.is_high()? {
                     self.motor.advance_step()?;
+                    self.status = Status::Reset2_2;
+                } else {
+                    self.motor.reset_index_to(self.offset);
+                    self.status = Status::Work;
+                }
+            }
+            Status::Reset2_2 => {
+                if self.sensor_pin.is_high()? {
+                    self.status = Status::Reset2_1;
                 } else {
                     self.motor.reset_index_to(self.offset);
                     self.status = Status::Work;
